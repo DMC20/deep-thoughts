@@ -1,5 +1,5 @@
-const { User, Thought } = require('../models');
 const { AuthenticationError } = require('apollo-server-express');
+const { User, Thought } = require('../models');
 const { signToken } = require('../utils/auth');
 
 const resolvers = {
@@ -10,30 +10,33 @@ const resolvers = {
           .select('-__v -password')
           .populate('thoughts')
           .populate('friends');
-    
+
         return userData;
       }
-    
+
       throw new AuthenticationError('Not logged in');
     },
-    thoughts: async (parent, { _id }) => {
-      return Thought.findOne({ _id });
-    },
-    // get all users
     users: async () => {
       return User.find()
-      .select('__v -password')
-      .populate('friends')
-      .populate('thoughts');
+        .select('-__v -password')
+        .populate('thoughts')
+        .populate('friends');
     },
-    // get a user by username
     user: async (parent, { username }) => {
       return User.findOne({ username })
-      .select('--v -password')
-      .populate('friends')
-      .populate('thoughts')
+        .select('-__v -password')
+        .populate('friends')
+        .populate('thoughts');
+    },
+    thoughts: async (parent, { username }) => {
+      const params = username ? { username } : {};
+      return Thought.find(params).sort({ createdAt: -1 });
+    },
+    thought: async (parent, { _id }) => {
+      return Thought.findOne({ _id });
     }
   },
+
   Mutation: {
     addUser: async (parent, args) => {
       const user = await User.create(args);
@@ -43,23 +46,23 @@ const resolvers = {
     },
     login: async (parent, { email, password }) => {
       const user = await User.findOne({ email });
-    
+
       if (!user) {
         throw new AuthenticationError('Incorrect credentials');
       }
-    
+
       const correctPw = await user.isCorrectPassword(password);
-    
+
       if (!correctPw) {
         throw new AuthenticationError('Incorrect credentials');
       }
-    
+
       const token = signToken(user);
       return { token, user };
     },
     addThought: async (parent, args, context) => {
       if (context.user) {
-        const thought = await Thought.create({ ...args, username: contezt.user.username });
+        const thought = await Thought.create({ ...args, username: context.user.username });
 
         await User.findByIdAndUpdate(
           { _id: context.user._id },
@@ -69,13 +72,14 @@ const resolvers = {
 
         return thought;
       }
-      throw new AuthenticationError('You need to be logged in')
+
+      throw new AuthenticationError('You need to be logged in!');
     },
     addReaction: async (parent, { thoughtId, reactionBody }, context) => {
-      if (!context.user) {
+      if (context.user) {
         const updatedThought = await Thought.findOneAndUpdate(
-          { _id: thoughtId},
-          { $push: { reactions: { reeactionBody, username: context.user.username } } },
+          { _id: thoughtId },
+          { $push: { reactions: { reactionBody, username: context.user.username } } },
           { new: true, runValidators: true }
         );
 
@@ -90,12 +94,12 @@ const resolvers = {
           { _id: context.user._id },
           { $addToSet: { friends: friendId } },
           { new: true }
-        ).populate['friends'];
+        ).populate('friends');
 
         return updatedUser;
       }
 
-      throw new AuthenticationError('You need to be logged in')
+      throw new AuthenticationError('You need to be logged in!');
     }
   }
 };
